@@ -220,6 +220,112 @@ var script = {
 			this.progress = 100;
 		},
 
+		generatePreviewPdf: function generatePreviewPdf () {
+			this.$emit('startPagination');
+			this.progress = 0;
+			this.paginationOfPreviwElements();
+		},
+
+		paginationOfPreviwElements: function paginationOfPreviwElements () {
+			this.progress = 25;
+
+			/*
+				When this props is true,
+				the props paginate-elements-by-height will not be used.
+				Instead the pagination process will rely on the elements with a class "html2pdf__page-break"
+				to know where to page break, which is automatically done by html2pdf.js
+			*/
+			if (this.manualPagination) {
+				this.progress = 70;
+				this.$emit('hasPaginated');
+				this.previewPdf();
+				return
+			}
+
+			if (!this.hasAlreadyParsed) {
+				var parentElement = this.$refs.pdfContent.firstChild;
+				var ArrOfContentChildren = Array.from(parentElement.children);
+				var childrenHeight = 0;
+
+				/*
+					Loop through Elements and add there height with childrenHeight variable.
+					Once the childrenHeight is >= this.paginateElementsByHeight, create a div with
+					a class named 'html2pdf__page-break' and insert the element before the element
+					that will be in the next page
+				*/
+				for (var childElement of ArrOfContentChildren) {
+					// Get The First Class of the element
+					var elementFirstClass = childElement.classList[0];
+					var isPageBreakClass = elementFirstClass === 'html2pdf__page-break';
+					if (isPageBreakClass) {
+						childrenHeight = 0;
+					} else {
+						// Get Element Height
+						var elementHeight = childElement.clientHeight;
+
+						// Get Computed Margin Top and Bottom
+						var elementComputedStyle = childElement.currentStyle || window.getComputedStyle(childElement);
+						var elementMarginTopBottom = parseInt(elementComputedStyle.marginTop) + parseInt(elementComputedStyle.marginBottom);
+
+						// Add Both Element Height with the Elements Margin Top and Bottom
+						var elementHeightWithMargin = elementHeight + elementMarginTopBottom;
+
+						if ((childrenHeight + elementHeight) < this.paginateElementsByHeight) {
+							childrenHeight += elementHeightWithMargin;
+						} else {
+							var section = document.createElement('div');
+							section.classList.add('html2pdf__page-break');
+							parentElement.insertBefore(section, childElement);
+
+							// Reset Variables made the upper condition false
+							childrenHeight = elementHeightWithMargin;
+						}
+					}
+				}
+
+				this.progress = 70;
+
+				/*
+					Set to true so that if would generate again we wouldn't need
+					to parse the HTML to paginate the elements
+				*/
+				this.hasAlreadyParsed = true;
+			} else {
+				this.progress = 70;
+			}
+
+			this.$emit('hasPaginated');
+			this.previewPdf();
+		},
+
+		previewPdf: async function previewPdf () {
+			// Set Element and Html2pdf.js Options
+			var pdfContent = this.$refs.pdfContent;
+			var options = this.setOptions();
+
+			//this.$emit('beforeDownload', { html2pdf: html2pdf, options: options, pdfContent: pdfContent });
+
+			var html2PdfSetup = html2pdf().set(options).from(pdfContent);
+			var pdfBlobUrl = null;
+
+			if (this.previewModal) {
+				this.pdfFile = await html2PdfSetup.output('bloburl');
+				pdfBlobUrl = this.pdfFile;
+			}
+
+			/*if (this.enableDownload) {
+				pdfBlobUrl = await html2PdfSetup.save().output('bloburl');
+			}
+
+			if (pdfBlobUrl) {
+				var res = await fetch(pdfBlobUrl);
+				var blobFile = await res.blob();
+				this.$emit('hasDownloaded', blobFile);
+			}*/
+
+			this.progress = 100;
+		},
+
 		setOptions: function setOptions () {
 			if (this.htmlToPdfOptions !== undefined && this.htmlToPdfOptions !== null) {
 				return this.htmlToPdfOptions
